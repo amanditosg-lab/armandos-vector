@@ -92,6 +92,7 @@ export default function ArmandosVector() {
 
   const [exportFormat, setExportFormat] = useState<ExportFormat>('svg')
   const [dragActive, setDragActive] = useState(false)
+  const [useAI, setUseAI] = useState(false) // Default to basic mode (free)
 
   // Handle file selection
   const handleFileSelect = useCallback((file: File) => {
@@ -156,34 +157,53 @@ export default function ArmandosVector() {
       const formData = new FormData()
       formData.append('image', selectedFile)
       formData.append('options', JSON.stringify(vectorOptions))
+      formData.append('useAI', useAI.toString())
 
       const response = await fetch('/api/vectorize', {
         method: 'POST',
         body: formData
       })
 
+      const result = await response.json()
+
       if (!response.ok) {
-        throw new Error('Error al vectorizar la imagen')
+        // Check if it's a credit error
+        if (result.isCreditError || response.status === 402) {
+          toast({
+            title: 'Créditos insuficientes',
+            description: 'El modo IA requiere créditos en Replicate. Usa el modo Básico (Gratis) o compra créditos.',
+            variant: 'destructive'
+          })
+          return
+        }
+        throw new Error(result.error || 'Error al vectorizar la imagen')
       }
 
-      const result = await response.json()
       setVectorizedResult(result.vectorizedImage)
       setIsVectorized(true)
 
-      // Apply positive/negative if needed
-      if (vectorOptions.colorMode === 'negative' && canvasRef.current) {
-        applyNegativeEffect()
+      // Show mode message if present
+      if (result.message) {
+        toast({
+          title: 'Vectorización completada',
+          description: result.message
+        })
+      } else {
+        toast({
+          title: '¡Vectorización completada!',
+          description: `Tu imagen ha sido vectorizada en modo ${result.mode === 'ai' ? 'IA' : 'básico'}`
+        })
       }
 
-      toast({
-        title: '¡Vectorización completada!',
-        description: 'Tu imagen ha sido vectorizada exitosamente'
-      })
+      // Apply positive/negative if needed (only for AI mode since basic handles it)
+      if (result.mode === 'ai' && vectorOptions.colorMode === 'negative' && canvasRef.current) {
+        applyNegativeEffect()
+      }
     } catch (error) {
       console.error('Vectorization error:', error)
       toast({
         title: 'Error',
-        description: 'Hubo un error al vectorizar la imagen',
+        description: error instanceof Error ? error.message : 'Hubo un error al vectorizar la imagen',
         variant: 'destructive'
       })
     } finally {
@@ -575,13 +595,45 @@ export default function ArmandosVector() {
                   <CardTitle>Acciones Rápidas</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Mode Selector */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Modo de Vectorización</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={!useAI ? "default" : "outline"}
+                        className={`flex-1 gap-2 ${!useAI ? "gradient-primary text-white" : ""}`}
+                        onClick={() => setUseAI(false)}
+                      >
+                        <Zap className="w-4 h-4" />
+                        Básico (Gratis)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={useAI ? "default" : "outline"}
+                        className={`flex-1 gap-2 ${useAI ? "gradient-primary text-white" : ""}`}
+                        onClick={() => setUseAI(true)}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        IA (Créditos)
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {!useAI
+                        ? "Modo básico gratuito. Convierte imágenes a SVG sin IA."
+                        : "Modo IA con Replicate. Requiere créditos pero ofrece mejor calidad."}
+                    </p>
+                  </div>
+
+                  <Separator />
+
                   <Button
                     className="w-full gap-2 gradient-primary text-white"
                     onClick={handleVectorize}
                     disabled={!selectedFile || isProcessing}
                   >
                     <Sparkles className="w-4 h-4" />
-                    Vectorizar Ahora
+                    {isProcessing ? 'Vectorizando...' : 'Vectorizar Ahora'}
                   </Button>
 
                   <Separator />
