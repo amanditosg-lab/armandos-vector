@@ -2,29 +2,53 @@ import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 
 export async function POST(request: NextRequest) {
+  console.log('🚀 Vectorization request received')
+  
   try {
     const formData = await request.formData()
     const imageFile = formData.get('image') as File
     const optionsJson = formData.get('options') as string
 
+    console.log('📦 Received data:', {
+      hasImage: !!imageFile,
+      imageType: imageFile?.type,
+      imageSize: imageFile?.size,
+      hasOptions: !!optionsJson
+    })
+
     if (!imageFile) {
+      console.error('❌ No image provided')
       return NextResponse.json(
-        { error: 'No image provided' },
+        { error: 'No image provided', details: 'Please upload an image to vectorize' },
         { status: 400 }
       )
     }
 
-    const options = JSON.parse(optionsJson || '{}')
+    let options
+    try {
+      options = JSON.parse(optionsJson || '{}')
+      console.log('⚙️ Vectorization options:', options)
+    } catch (e) {
+      console.error('❌ Failed to parse options:', e)
+      return NextResponse.json(
+        { error: 'Invalid options format', details: 'Could not parse vectorization options' },
+        { status: 400 }
+      )
+    }
 
     // Convert image to base64
+    console.log('🔄 Converting image to base64...')
     const bytes = await imageFile.arrayBuffer()
     const buffer = Buffer.from(bytes)
     const base64Image = buffer.toString('base64')
     const mimeType = imageFile.type
     const imageDataUrl = `data:${mimeType};base64,${base64Image}`
+    console.log('✅ Image converted, size:', base64Image.length, 'characters')
 
     // Initialize ZAI
+    console.log('🤖 Initializing AI SDK...')
     const zai = await ZAI.create()
+    console.log('✅ AI SDK initialized')
 
     // Build the vectorization prompt based on options
     let prompt = `Convert this image to a clean vector format suitable for professional design and rubber stamps. `
@@ -69,13 +93,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Use image edit capability for vectorization
+    console.log('🎨 Starting AI vectorization...')
     const response = await zai.images.generations.edit({
       prompt: `${prompt} Return the result as a clean, high-quality vector-ready image.`,
       images: [{ url: imageDataUrl }],
       size: '1024x1024'
     })
+    console.log('✅ AI vectorization completed')
 
     const vectorizedBase64 = response.data[0].base64
+    console.log('📤 Result size:', vectorizedBase64.length, 'characters')
 
     return NextResponse.json({
       success: true,
@@ -83,9 +110,19 @@ export async function POST(request: NextRequest) {
       options: options
     })
   } catch (error) {
-    console.error('Vectorization error:', error)
+    console.error('❌ Vectorization error:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available')
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : ''
+    
     return NextResponse.json(
-      { error: 'Failed to vectorize image', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Failed to vectorize image', 
+        details: errorMessage,
+        environment: process.env.NODE_ENV || 'unknown',
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     )
   }
