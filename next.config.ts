@@ -18,9 +18,6 @@ const nextConfig: NextConfig = {
     },
   },
   
-  // Optimizaciones para producción
-  swcMinify: true,
-  
   // Manejo de imágenes
   images: {
     remotePatterns: [],

@@ -1,9 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import Replicate from 'replicate'
+
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
+})
+
+// System prompt for the design expert AI
+const SYSTEM_PROMPT = `You are an expert graphic design consultant specializing in vectorization, rubber stamp production, typography, and CorelDRAW. You have extensive knowledge in:
+
+1. Vectorization techniques and best practices
+2. Creating designs suitable for rubber stamp production
+3. Typography, font recognition, and text design
+4. CorelDRAW optimization and workflow
+5. Color theory for print media
+6. Positive/negative inversion for stamps
+7. File formats (SVG, PDF, EPS, DXF, AI)
+
+Provide professional, practical, and clear advice. When users ask about stamps, always consider:
+- Line weight and visibility
+- Negative space requirements
+- Print compatibility
+- Material considerations
+- Scalability for different stamp sizes
+
+Be encouraging and helpful to both beginners and professionals.`
 
 export async function POST(request: NextRequest) {
+  console.log('💬 Chat request received')
+
   try {
-    const { message, imageContext, history } = await request.json()
+    const { message, history, imageData } = await request.json()
+
+    console.log('📦 Chat data:', {
+      hasMessage: !!message,
+      messageLength: message?.length,
+      historyLength: history?.length,
+      hasImage: !!imageData
+    })
+
+    if (!process.env.REPLICATE_API_TOKEN) {
+      console.error('❌ REPLICATE_API_TOKEN not set')
+      return NextResponse.json(
+        { error: 'API configuration error', details: 'REPLICATE_API_TOKEN is not configured' },
+        { status: 500 }
+      )
+    }
 
     if (!message) {
       return NextResponse.json(
@@ -12,110 +53,76 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize ZAI
-    const zai = await ZAI.create()
+    // Build conversation context
+    let conversation = SYSTEM_PROMPT + '\n\n'
 
-    // Build system prompt for design expert AI
-    const systemPrompt = `You are an expert graphic design and vectorization specialist with deep knowledge in:
+    // Add history
+    if (history && history.length > 0) {
+      conversation += 'Previous conversation:\n'
+      history.forEach((msg: any) => {
+        conversation += `${msg.role}: ${msg.content}\n`
+      })
+      conversation += '\n'
+    }
 
-- Professional vectorization techniques for logos, illustrations, and artwork
-- Rubber stamp design and production requirements
-- Typography and font recognition
-- Color theory and color modes (CMYK, RGB, Pantone)
-- Print production and prepress requirements
-- Vector file formats (SVG, EPS, AI, PDF, DXF)
-- Design software compatibility (CorelDRAW, Adobe Illustrator, Inkscape)
-- Image optimization for different use cases
+    // Add current message
+    conversation += `User: ${message}\n`
+    conversation += '\nProvide a helpful, expert response:'
 
-Your expertise includes:
-1. Analyzing images for vectorization potential
-2. Suggesting optimal vectorization settings
-3. Recognizing and identifying fonts
-4. Providing design recommendations for rubber stamps
-5. Explaining technical concepts in simple terms
-6. Offering practical solutions to design challenges
+    console.log('🤖 Calling Replicate AI...')
 
-Always provide:
-- Clear, actionable advice
-- Technical explanations when appropriate
-- Practical tips and best practices
-- Specific recommendations for CorelDRAW compatibility
-- Considerations for rubber stamp production
-
-When asked about fonts, describe:
-- Font characteristics (serif/sans-serif, weight, style)
-- Possible font families or similar alternatives
-- Recommendations for vector-based text
-- Tips for text in rubber stamp designs
-
-When asked about vectorization:
-- Explain the best mode for the image type
-- Suggest optimal detail and smoothness settings
-- Recommend color count based on the image
-- Provide tips for print optimization
-
-Be helpful, professional, and thorough in your responses.`
-
-    // Build messages array with history
-    const messages: any[] = [
+    const output = await replicate.run(
+      "meta/meta-llama-3-70b-instruct:4b83ab0198ad37a14f287d35e64dd545f8c99f6c952713e88494a2a4a10cc657",
       {
-        role: 'assistant',
-        content: systemPrompt
-      }
-    ]
-
-    // Add conversation history if available
-    if (history && Array.isArray(history)) {
-      for (const msg of history) {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          messages.push({
-            role: msg.role,
-            content: msg.content
-          })
+        input: {
+          prompt: conversation,
+          max_tokens: 1000,
+          temperature: 0.7,
+          top_p: 0.9,
+          top_k: 50,
+          repeat_penalty: 1,
+          system_prompt: SYSTEM_PROMPT,
         }
       }
+    )
+
+    console.log('✅ AI response received')
+
+    // The output from Llama is typically a string
+    const responseText = Array.isArray(output) ? output.join('') : String(output)
+
+    // Clean up the response (remove any remaining system prompt artifacts)
+    let cleanResponse = responseText
+      .replace(/System:.*?User:/gs, '')
+      .replace(/Previous conversation:.*?User:/gs, '')
+      .replace(/Provide a helpful, expert response:/gs, '')
+      .trim()
+
+    // If the response is empty, use a fallback
+    if (!cleanResponse || cleanResponse.length < 10) {
+      cleanResponse = "I'm here to help with your vectorization and design needs! Could you please provide more details about what you'd like to know?"
     }
 
-    // Add current message with image context if available
-    if (imageContext) {
-      messages.push({
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: message
-          },
-          {
-            type: 'image_url',
-            image_url: {
-              url: imageContext
-            }
-          }
-        ]
-      })
-    } else {
-      messages.push({
-        role: 'user',
-        content: message
-      })
-    }
-
-    // Get completion from AI
-    const completion = await zai.chat.completions.create({
-      messages: messages,
-      thinking: { type: 'disabled' }
-    })
-
-    const response = completion.choices[0]?.message?.content || 'Lo siento, no pude generar una respuesta.'
+    console.log('📤 Response length:', cleanResponse.length)
 
     return NextResponse.json({
       success: true,
-      response: response
+      response: cleanResponse,
+      timestamp: new Date().toISOString()
     })
+
   } catch (error) {
-    console.error('Chat error:', error)
+    console.error('❌ Chat error:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available')
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+
     return NextResponse.json(
-      { error: 'Failed to process chat message', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Failed to process chat message',
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     )
   }

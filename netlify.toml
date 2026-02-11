@@ -1,17 +1,15 @@
 [build]
   base = "/"
-  command = "npm run build && echo '{\"baseUrl\":\"'\"$ZAI_BASE_URL'\"\",\"apiKey\":\"'\"$ZAI_API_KEY'\"\",\"chatId\":\"'\"$ZAI_CHAT_ID'\"\",\"userId\":\"'\"$ZAI_USER_ID'\"\"}' | sed \"s/'/\\\\\"/g\" > .z-ai-config && cat .z-ai-config"
+  command = "npm run build"
   publish = ".next"
 
 [build.environment]
   NETLIFY_NEXT_PLUGIN_SKIP = "false"
   NEXT_TELEMETRY_DISABLED = "1"
   NODE_VERSION = "20"
-  # Z AI SDK Configuration - Configure these in Netlify Site Settings → Environment variables
-  ZAI_BASE_URL = ""
-  ZAI_API_KEY = ""
-  ZAI_CHAT_ID = ""
-  ZAI_USER_ID = ""
+  # Replicate API Configuration - Configure this in Netlify Site Settings → Environment variables
+  # Get your free API token from: https://replicate.com/account/api-tokens
+  REPLICATE_API_TOKEN = ""
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
