@@ -233,3 +233,51 @@ Stage Summary:
 - Listo para configurar REPLICATE_API_TOKEN en Netlify
 - Código limpio sin warnings de lint
 - Cambios commiteados y pusheados a GitHub
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: Implementar Opción 4 - Modo Básico GRATIS + Modo IA con créditos
+
+Work Log:
+- Instalado imagetracerjs v1.2.6 para vectorización básica
+- Instalado sharp (ya existía) para procesamiento de imágenes en servidor
+- Creado endpoint /api/vectorize con soporte dual:
+  - Parámetro useAI para seleccionar modo (true/false)
+  - Modo Básico (useAI=false): Convierte imágenes a SVG sin IA
+    - Función bitmapToSVG personalizada
+    - Cuantización de colores basada en opciones
+    - Ajuste de detalle, suavizado y número de colores
+    - Generación de SVG con elementos rect
+    - Filtros SVG para suavizado
+    - Soporte para inversión positivo/negativo
+    - Usa sharp para redimensionar y procesar imágenes
+  - Modo IA (useAI=true): Usa Replicate SDXL
+    - Mantiene toda la funcionalidad anterior
+    - Mejor calidad con IA pero requiere créditos
+- Manejo mejorado de errores:
+  - Detección de errores 402 (créditos insuficientes)
+  - Mensajes específicos para cada tipo de error
+  - Sugerencias para el usuario (usar modo básico)
+- Actualizado frontend (page.tsx):
+  - Nuevo estado useAI (default false = modo básico)
+  - Selector de modo en UI con dos botones:
+    - "Básico (Gratis)" con icono Zap
+    - "IA (Créditos)" con icono Sparkles
+  - Descripción dinámica según modo seleccionado
+  - Parámetro useAI enviado en formData
+  - Manejo de errores de crédito en frontend
+  - Toast mejorados con mensajes específicos
+  - Indicador de carga en botón "Vectorizando..."
+- Linting sin errores
+- Commit y push a GitHub con todos los cambios
+
+Stage Summary:
+- Aplicación ahora funciona GRATIS sin necesidad de créditos (modo básico)
+- Opción de usar IA con mejores resultados si el usuario compra créditos
+- UI clara con selector de modo y explicaciones
+- Manejo robusto de errores y sugerencias al usuario
+- Código limpio y sin errores
+- Cambios commiteados y pusheados a GitHub
+- Listo para redesplegar en Netlify
+
